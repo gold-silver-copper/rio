@@ -3080,9 +3080,17 @@ impl<U: EventListener> Handler for Crosswords<U> {
                 s.flags.remove(StyleFlags::ALL_UNDERLINES);
                 s.flags.insert(StyleFlags::DASHED_UNDERLINE);
             }),
-            Attr::BlinkSlow | Attr::BlinkFast | Attr::CancelBlink => {
-                info!("Term got unhandled attr: {:?}", attr);
-            }
+            Attr::BlinkSlow => self.grid.update_template_style(|s| {
+                s.flags.remove(StyleFlags::ALL_BLINK);
+                s.flags.insert(StyleFlags::SLOW_BLINK);
+            }),
+            Attr::BlinkFast => self.grid.update_template_style(|s| {
+                s.flags.remove(StyleFlags::ALL_BLINK);
+                s.flags.insert(StyleFlags::RAPID_BLINK);
+            }),
+            Attr::CancelBlink => self
+                .grid
+                .update_template_style(|s| s.flags.remove(StyleFlags::ALL_BLINK)),
             Attr::CancelUnderline => self
                 .grid
                 .update_template_style(|s| s.flags.remove(StyleFlags::ALL_UNDERLINES)),
@@ -5370,6 +5378,26 @@ mod tests {
         let size = CrosswordsSize::new(4, 4);
         let window_id = crate::event::WindowId::from(0);
         Crosswords::new(size, CursorShape::Block, VoidListener {}, window_id, 0, 10)
+    }
+
+    #[test]
+    fn terminal_attributes_preserve_blink_kind() {
+        use crate::crosswords::style::StyleFlags;
+
+        let mut cw = make_crosswords();
+        cw.terminal_attribute(Attr::BlinkSlow);
+        let style = cw.grid.style_of(&cw.grid.cursor.template);
+        assert!(style.flags.contains(StyleFlags::SLOW_BLINK));
+        assert!(!style.flags.contains(StyleFlags::RAPID_BLINK));
+
+        cw.terminal_attribute(Attr::BlinkFast);
+        let style = cw.grid.style_of(&cw.grid.cursor.template);
+        assert!(!style.flags.contains(StyleFlags::SLOW_BLINK));
+        assert!(style.flags.contains(StyleFlags::RAPID_BLINK));
+
+        cw.terminal_attribute(Attr::CancelBlink);
+        let style = cw.grid.style_of(&cw.grid.cursor.template);
+        assert!(!style.flags.intersects(StyleFlags::ALL_BLINK));
     }
 
     // Minimum-valid simple glyph: one contour, one on-curve point.
